@@ -20,8 +20,7 @@ Este backend gestiona las operaciones principales del sistema de citas médicas:
 -**Crear entorno Virtual**
 
 python -m venv venv
-source venv/bin/activate  # (Linux/Mac)
-venv\Scripts\activate     # (Windows)
+venv\Scripts\activate     
 
 
 -**Instalar Dependencias**-

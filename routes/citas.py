@@ -244,3 +244,76 @@ async def get_historial_citas(paciente_id: str):
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
+
+##Reagendar Citas
+
+@router.patch("/citas/{cita_id}/reagendar")
+async def reagendar_cita(cita_id: str, fecha: str = Form(...), hora: str = Form(...), sucursal_id: str = Form(...)):
+    try:
+        # Verificar que la cita existe
+        cita_res = supabase.table("citas").select("*").eq("id", cita_id).execute()
+        if not cita_res.data:
+            return JSONResponse({"error": "Cita no encontrada"}, status_code=404)
+        
+        # Validar disponibilidad del médico
+        cita = cita_res.data[0]
+        horarios_res = supabase.table("horarios").select("*").eq("medico_id", cita["medico_id"]).eq("sucursal_id", sucursal_id).execute()
+        horarios = horarios_res.data or []
+
+        if not horarios:
+            return JSONResponse({"error": "El médico no tiene horarios en esta sucursal"}, status_code=400)
+
+        # Validar que no haya otra cita pendiente a la misma hora
+        citas_res = supabase.table("citas").select("*").eq("medico_id", cita["medico_id"]).eq("fecha", fecha).eq("hora", hora).eq("estado", "pendiente").execute()
+        if citas_res.data:
+            return JSONResponse({"error": "El médico ya tiene una cita pendiente en esa fecha y hora"}, status_code=400)
+
+        # Actualizar cita
+        update_res = supabase.table("citas").update({
+            "fecha": fecha,
+            "hora": hora,
+            "sucursal_id": sucursal_id
+        }).eq("id", cita_id).execute()
+
+        if not update_res.data:
+            return JSONResponse({"error": "No se pudo reagendar la cita"}, status_code=400)
+
+        return JSONResponse({"message": "Cita reagendada correctamente", "cita": update_res.data[0]}, status_code=200)
+
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+# Endpoint para que el admin vea las citas del paciente y del medico
+
+@router.get("/citas/todas")
+async def get_all_citas():
+    try:
+        citas_res = supabase.table("citas").select("*").execute()
+        citas = citas_res.data or []
+        dias_es = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
+
+        citas_enriquecidas = []
+        for c in citas:
+            # traer nombres
+            pac_res = supabase.table("usuarios").select("nombre").eq("id", c["paciente_id"]).execute()
+            med_res = supabase.table("usuarios").select("nombre").eq("id", c["medico_id"]).execute()
+            suc_res = supabase.table("sucursales").select("nombre").eq("id", c["sucursal_id"]).execute()
+
+            fecha_dt = datetime.strptime(c["fecha"], "%Y-%m-%d").date()
+            dia_semana = dias_es[fecha_dt.weekday()]
+
+            citas_enriquecidas.append({
+                "id": c["id"],
+                "paciente": pac_res.data[0]["nombre"] if pac_res.data else "Desconocido",
+                "medico": med_res.data[0]["nombre"] if med_res.data else "Desconocido",
+                "sucursal": suc_res.data[0]["nombre"] if suc_res.data else "Desconocida",
+                "fecha": c["fecha"],
+                "hora": c["hora"],
+                "fecha_formateada": f"{dia_semana} {fecha_dt.strftime('%d/%m/%Y')}",
+                "estado": c["estado"]
+            })
+
+        return citas_enriquecidas
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
