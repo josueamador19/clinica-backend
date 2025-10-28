@@ -8,7 +8,6 @@ import os
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Configuración JWT
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
@@ -24,7 +23,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM), expire
 
 
 @router.post("/login")
@@ -38,8 +37,15 @@ async def login(email: str = Form(...), password: str = Form(...)):
         if not verify_password(password, user.get("password", "")):
             return JSONResponse({"error": "Contraseña incorrecta"}, status_code=401)
 
-        access_token = create_access_token({"sub": str(user["id"])})
+        access_token, expire = create_access_token({"sub": str(user["id"])})
         user_data = {k: v for k, v in user.items() if k != "password"}
-        return {"message": "Login exitoso", "access_token": access_token, "user": user_data}
+
+        return {
+            "message": "Login exitoso",
+            "access_token": access_token,
+            "token_expiration": int(expire.timestamp() * 1000),
+            "user": user_data
+        }
+
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
