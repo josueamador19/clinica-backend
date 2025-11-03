@@ -9,9 +9,7 @@ MEDICO_ROLE_ID = "5770e7d5-c449-4094-bbe1-fd52ee6fe75f"
 
 @router.get("/medicos")
 async def get_medicos():
-    """
-    Obtener todos los usuarios cuyo rol es médico
-    """
+    
     try:
         res = supabase.table("usuarios").select(
             "id, nombre, email, telefono, foto_url"
@@ -25,9 +23,7 @@ async def get_medicos():
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
-# --------------------------------------------------
-# Obtener todas las citas de un médico
-# --------------------------------------------------
+
 @router.get("/citas/medico/{medico_id}")
 async def get_citas_medico(medico_id: str):
     try:
@@ -38,15 +34,13 @@ async def get_citas_medico(medico_id: str):
 
         citas_enriquecidas = []
         for c in citas:
-            # Obtener nombre del paciente
+
             paciente_res = supabase.table("usuarios").select("nombre").eq("id", c["paciente_id"]).execute()
             paciente_nombre = paciente_res.data[0]["nombre"] if paciente_res.data else "Desconocido"
 
-            # Obtener sucursal
             sucursal_res = supabase.table("sucursales").select("nombre").eq("id", c["sucursal_id"]).execute()
             sucursal_nombre = sucursal_res.data[0]["nombre"] if sucursal_res.data else "Desconocida"
 
-            # Formatear fecha y obtener día de la semana
             fecha_dt = datetime.strptime(c["fecha"], "%Y-%m-%d")
             dia_semana = dias_es[fecha_dt.weekday()]
             fecha_formateada = fecha_dt.strftime("%d/%m/%Y")
@@ -69,14 +63,10 @@ async def get_citas_medico(medico_id: str):
         return JSONResponse({"error": str(e)}, status_code=400)
 
 
-# --------------------------------------------------
-# Actualizar estado de una cita
-# --------------------------------------------------
+
 @router.patch("/citas/{cita_id}/completar")
 async def completar_cita(cita_id: str):
-    """
-    Marcar cita como completada
-    """
+
     try:
         res = supabase.table("citas").update({"estado": "completada"}).eq("id", cita_id).execute()
         if not res.data:

@@ -31,11 +31,11 @@ async def login(email: str = Form(...), password: str = Form(...)):
     try:
         res = supabase.table("usuarios").select("*").eq("email", email).execute()
         if not res.data:
-            return JSONResponse({"error": "Usuario no encontrado"}, status_code=404)
+            return JSONResponse({"error": "Credenciales no validas"}, status_code=404)
 
         user = res.data[0]
         if not verify_password(password, user.get("password", "")):
-            return JSONResponse({"error": "Contraseña incorrecta"}, status_code=401)
+            return JSONResponse({"error": "Credenciales no validas"}, status_code=401)
 
         access_token, expire = create_access_token({"sub": str(user["id"])})
         user_data = {k: v for k, v in user.items() if k != "password"}
