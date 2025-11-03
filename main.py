@@ -13,7 +13,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
+@app.get("/")
+def read_root():
+    return {"message": "Servidor desplegado"}
 # Registrar rutas
 app.include_router(auth.router)
 app.include_router(usuarios.router)
