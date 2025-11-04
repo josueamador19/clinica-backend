@@ -13,20 +13,20 @@ router = APIRouter(prefix="/auth", tags=["Auth"])
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Cambiamos a argon2
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 
 # 🔒 Funciones auxiliares
 def hash_password(password: str) -> str:
-    """Genera un hash seguro truncando antes de aplicar bcrypt."""
-    truncated = password[:72]
-    return pwd_context.hash(truncated)
+    """Genera un hash seguro usando argon2."""
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica la contraseña truncando a 72 bytes antes de comparar."""
-    truncated = plain_password[:72]
-    return pwd_context.verify(truncated, hashed_password)
+    """Verifica la contraseña usando argon2."""
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
@@ -48,7 +48,6 @@ async def register(
     try:
         email = email.strip().lower()
         nombre = nombre.strip()
-        password = password[:72]  # truncar a 72 bytes
 
         # Verificar si el usuario ya existe
         existing = supabase.table("usuarios").select("*").eq("email", email).execute()
@@ -83,7 +82,6 @@ async def login(
 ):
     try:
         email = email.strip().lower()
-        password = password[:72]  # truncar a 72 bytes
 
         res = supabase.table("usuarios").select("*").eq("email", email).execute()
         if not res.data:
