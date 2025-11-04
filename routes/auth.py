@@ -31,13 +31,13 @@ class RegisterRequest(BaseModel):
 # 🔑 Funciones auxiliares
 def hash_password(password: str) -> str:
     """Genera un hash seguro truncando antes de aplicar bcrypt."""
-    truncated = password[:72]
+    truncated = password[:100]
     return pwd_context.hash(truncated)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verifica la contraseña truncando a 72 bytes antes de comparar."""
-    truncated = plain_password[:72]
+    truncated = plain_password[:100]
     return pwd_context.verify(truncated, hashed_password)
 
 
