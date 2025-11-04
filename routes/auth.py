@@ -21,21 +21,69 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    nombre: str
+    email: str
+    password: str
+    rol: str = "usuario"
+
+
 # 🔑 Funciones auxiliares
+def hash_password(password: str) -> str:
+    """Genera un hash seguro truncando antes de aplicar bcrypt."""
+    truncated = password[:72]
+    return pwd_context.hash(truncated)
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    # bcrypt solo usa los primeros 72 bytes, así que truncamos antes de verificar
+    """Verifica la contraseña truncando a 72 bytes antes de comparar."""
     truncated = plain_password[:72]
     return pwd_context.verify(truncated, hashed_password)
 
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
+    """Crea un token JWT con expiración configurable."""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM), expire
 
 
-# 🔐 Endpoint de login usando JSON
+# 🧩 Registro de usuario
+@router.post("/register")
+async def register(request: RegisterRequest):
+    try:
+        email = request.email.strip().lower()
+        nombre = request.nombre.strip()
+        password = request.password
+
+        # Verificar si el usuario ya existe
+        existing = supabase.table("usuarios").select("*").eq("email", email).execute()
+        if existing.data:
+            raise HTTPException(status_code=400, detail="El usuario ya existe")
+
+        # Hashear la contraseña truncada
+        hashed_password = hash_password(password)
+
+        new_user = {
+            "nombre": nombre,
+            "email": email,
+            "password": hashed_password,
+            "rol": request.rol,
+            "fecha_creacion": datetime.utcnow().isoformat()
+        }
+
+        supabase.table("usuarios").insert(new_user).execute()
+
+        return {"message": "Usuario registrado correctamente"}
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+
+
+# 🔐 Inicio de sesión
 @router.post("/login")
 async def login(request: LoginRequest):
     try:
