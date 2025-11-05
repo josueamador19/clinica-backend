@@ -1,6 +1,7 @@
-# auth.py
-from fastapi import APIRouter, Form, HTTPException
+
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from supabase_client import supabase
 from datetime import datetime, timedelta
 from jose import jwt
@@ -9,52 +10,61 @@ import os
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# 🔑 Configuración
+# 🔑 Configuración JWT
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# Cambiamos a argon2
+# 🔒 Argon2 para hashing de contraseñas
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
+# ==============================
+# MODELOS Pydantic
+# ==============================
+class RegisterRequest(BaseModel):
+    nombre: str
+    email: str
+    password: str
+    rol: str = "usuario"
 
-# 🔒 Funciones auxiliares
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+# ==============================
+# FUNCIONES AUXILIARES
+# ==============================
 def hash_password(password: str) -> str:
-    """Genera un hash seguro usando argon2."""
+    """Genera un hash seguro usando Argon2"""
     return pwd_context.hash(password)
 
-
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifica la contraseña usando argon2."""
+    """Verifica la contraseña usando Argon2"""
     return pwd_context.verify(plain_password, hashed_password)
 
-
 def create_access_token(data: dict, expires_delta: timedelta = None):
-    """Crea un token JWT con expiración configurable."""
+    """Crea un token JWT con expiración configurable"""
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM), expire
 
-
-# 🧩 Registro de usuario
+# ==============================
+# REGISTRO DE USUARIO
+# ==============================
 @router.post("/register")
-async def register(
-    nombre: str = Form(...),
-    email: str = Form(...),
-    password: str = Form(...),
-    rol: str = Form("usuario")
-):
+async def register(request: RegisterRequest):
     try:
-        email = email.strip().lower()
-        nombre = nombre.strip()
+        email = request.email.strip().lower()
+        nombre = request.nombre.strip()
+        rol = request.rol
 
         # Verificar si el usuario ya existe
         existing = supabase.table("usuarios").select("*").eq("email", email).execute()
         if existing.data:
             raise HTTPException(status_code=400, detail="El usuario ya existe")
 
-        hashed_password = hash_password(password)
+        hashed_password = hash_password(request.password)
 
         new_user = {
             "nombre": nombre,
@@ -73,19 +83,18 @@ async def register(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-
-# 🔐 Inicio de sesión
+# ==============================
+# LOGIN DE USUARIO
+# ==============================
 @router.post("/login")
-async def login(
-    email: str = Form(...),
-    password: str = Form(...)
-):
+async def login(request: LoginRequest):
     try:
-        email = email.strip().lower()
+        email = request.email.strip().lower()
+        password = request.password
 
         res = supabase.table("usuarios").select("*").eq("email", email).execute()
         if not res.data:
-            raise HTTPException(status_code=404, detail="Credenciales no válidas")
+            raise HTTPException(status_code=401, detail="Credenciales no válidas")
 
         user = res.data[0]
         if not verify_password(password, user.get("password", "")):
