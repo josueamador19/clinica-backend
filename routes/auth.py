@@ -1,27 +1,30 @@
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Form, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 from supabase_client import supabase
 from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
+from typing import Optional
+import uuid
 import os
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# 🔑 Configuración
+# 🔑 Configuración JWT
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-# Argon2
+# 🔒 Argon2
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+MAX_PASSWORD_LENGTH = 72
 
 # 🔒 Funciones auxiliares
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(password[:MAX_PASSWORD_LENGTH])
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(plain_password[:MAX_PASSWORD_LENGTH], hashed_password)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -37,18 +40,30 @@ async def register(
     password: str = Form(...),
     rol: str = Form("usuario"),
     telefono: str = Form(None),
-    sucursal_id: str = Form(None)
+    sucursal_id: str = Form(None),
+    foto: Optional[UploadFile] = File(None)
 ):
     try:
         email = email.strip().lower()
         nombre = nombre.strip()
 
+        # Verificar si el usuario ya existe
         existing = supabase.table("usuarios").select("*").eq("email", email).execute()
         if existing.data:
             raise HTTPException(status_code=400, detail="El usuario ya existe")
 
+        # Subir foto si existe
+        foto_url = None
+        if foto:
+            file_data = await foto.read()
+            unique_filename = f"{uuid.uuid4()}_{foto.filename}"
+            supabase.storage.from_("usuarios").upload(unique_filename, file_data)
+            foto_url = supabase.storage.from_("usuarios").get_public_url(unique_filename)
+
+        # Hash de la contraseña
         hashed_password = hash_password(password)
 
+        # Crear nuevo usuario
         new_user = {
             "nombre": nombre,
             "email": email,
@@ -56,12 +71,15 @@ async def register(
             "rol_id": rol,
             "telefono": telefono,
             "sucursal_id": sucursal_id,
-            "fecha_creacion": datetime.utcnow().isoformat()
+            "foto_url": foto_url
         }
 
-        supabase.table("usuarios").insert(new_user).execute()
+        res = supabase.table("usuarios").insert(new_user).execute()
+        if not res.data:
+            return JSONResponse({"error": "No se pudo crear el usuario"}, status_code=400)
 
-        return {"message": "Usuario registrado correctamente"}
+        user_data = {k: v for k, v in res.data[0].items() if k != "password"}
+        return {"message": "Usuario registrado correctamente", "user": user_data}
 
     except HTTPException as e:
         raise e
