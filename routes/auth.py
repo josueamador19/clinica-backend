@@ -8,18 +8,20 @@ import os
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
+# 🔑 Configuración
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
+# Argon2
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-MAX_PASSWORD_LENGTH = 72
 
+# 🔒 Funciones auxiliares
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password[:MAX_PASSWORD_LENGTH])
+    return pwd_context.hash(password)
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password[:MAX_PASSWORD_LENGTH], hashed_password)
+    return pwd_context.verify(plain_password, hashed_password)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -27,6 +29,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM), expire
 
+# 🧩 Registro de usuario
 @router.post("/register")
 async def register(
     nombre: str = Form(...),
@@ -65,6 +68,7 @@ async def register(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
+# 🔐 Login
 @router.post("/login")
 async def login(
     email: str = Form(...),
