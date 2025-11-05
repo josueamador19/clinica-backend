@@ -31,27 +31,27 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM), expire
 
-# 🧩 Registro de usuario (igual que usuarios.py, con Argon2)
+#  Registro de usuario (igual que usuarios.py, con Argon2)
 @router.post("/register")
 async def register(
     nombre: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
-    rol: str = Form("usuario"),
+    rol_id: str = Form(...),
+    sucursal_id: str = Form(...),
     telefono: str = Form(""),
-    sucursal_id: str = Form(None),
     foto: Optional[UploadFile] = File(None)
 ):
     try:
         email = email.strip().lower()
         nombre = nombre.strip()
 
-        # Revisar si existe
+        # Verificar si el usuario ya existe
         existing = supabase.table("usuarios").select("*").eq("email", email).execute()
         if existing.data:
             raise HTTPException(status_code=400, detail="El usuario ya existe")
 
-        # Subida de foto
+        # Subir foto si existe
         foto_url = None
         if foto:
             file_data = await foto.read()
@@ -59,25 +59,25 @@ async def register(
             supabase.storage.from_("usuarios").upload(unique_filename, file_data)
             foto_url = supabase.storage.from_("usuarios").get_public_url(unique_filename)
 
+        # Hashear contraseña
         hashed_password = hash_password(password)
 
-        new_user = {
+        # Insertar usuario
+        data = {
             "nombre": nombre,
             "email": email,
             "password": hashed_password,
-            "rol_id": rol,
-            "telefono": telefono,
+            "rol_id": rol_id,
             "sucursal_id": sucursal_id,
-            "foto_url": foto_url,
-            "fecha_creacion": datetime.utcnow().isoformat()
+            "telefono": telefono,
+            "foto_url": foto_url
         }
 
-        res = supabase.table("usuarios").insert(new_user).execute()
+        res = supabase.table("usuarios").insert(data).execute()
         if not res.data:
             return JSONResponse({"error": "No se pudo crear el usuario"}, status_code=400)
 
         user_data = {k: v for k, v in res.data[0].items() if k != "password"}
-
         return {"message": "Usuario registrado correctamente", "user": user_data}
 
     except HTTPException as e:
