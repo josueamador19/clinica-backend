@@ -8,23 +8,18 @@ import os
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
-# Configuración JWT
 SECRET_KEY = os.getenv("JWT_SECRET", "supersecretkey")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
-
 pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
-MAX_PASSWORD_LENGTH = 72  
+MAX_PASSWORD_LENGTH = 72
 
-# Funciones auxiliares
 def hash_password(password: str) -> str:
-    truncated = password[:MAX_PASSWORD_LENGTH] 
-    return pwd_context.hash(truncated)
+    return pwd_context.hash(password[:MAX_PASSWORD_LENGTH])
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    truncated = plain_password[:MAX_PASSWORD_LENGTH]
-    return pwd_context.verify(truncated, hashed_password)
+    return pwd_context.verify(plain_password[:MAX_PASSWORD_LENGTH], hashed_password)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
@@ -32,13 +27,14 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM), expire
 
-#  Registro
 @router.post("/register")
 async def register(
     nombre: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
-    rol: str = Form("usuario")
+    rol: str = Form("usuario"),
+    telefono: str = Form(None),
+    sucursal_id: str = Form(None)
 ):
     try:
         email = email.strip().lower()
@@ -54,7 +50,9 @@ async def register(
             "nombre": nombre,
             "email": email,
             "password": hashed_password,
-            "rol": rol,
+            "rol_id": rol,
+            "telefono": telefono,
+            "sucursal_id": sucursal_id,
             "fecha_creacion": datetime.utcnow().isoformat()
         }
 
@@ -67,7 +65,6 @@ async def register(
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-#  Login
 @router.post("/login")
 async def login(
     email: str = Form(...),
@@ -75,7 +72,6 @@ async def login(
 ):
     try:
         email = email.strip().lower()
-
         res = supabase.table("usuarios").select("*").eq("email", email).execute()
         if not res.data:
             raise HTTPException(status_code=404, detail="Credenciales no válidas")
