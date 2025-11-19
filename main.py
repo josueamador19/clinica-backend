@@ -5,7 +5,10 @@ from routes import auth, usuarios, roles, sucursales, medicos, citas, pacientes
 app = FastAPI()
 
 # CORS
-origins = ["*"]
+origins = [
+    "https://medicentro.vercel.app",
+    "http://localhost:3000"
+]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
